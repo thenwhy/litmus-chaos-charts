@@ -1,0 +1,237 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster_id: 7bd7097d-6177-498a-92ab-dafbc1a00de1
+    subject: nodecpuhog_litmus
+    workflow_id: a1e3acea-8ab5-4c3b-a9ed-25a083b16217
+    workflows.argoproj.io/controller-instanceid: 7bd7097d-6177-498a-92ab-dafbc1a00de1
+  name: nodecpuhog-1666074607
+  namespace: litmus
+spec:
+  arguments:
+    parameters:
+    - name: adminModeNamespace
+      value: litmus
+  entrypoint: custom-chaos
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: argo-chaos
+  templates:
+  - inputs: {}
+    metadata: {}
+    name: custom-chaos
+    outputs: {}
+    steps:
+    - - arguments: {}
+        name: install-chaos-experiments
+        template: install-chaos-experiments
+    - - arguments: {}
+        name: node-cpu-hog-wn4
+        template: node-cpu-hog-wn4
+  - container:
+      args:
+      - kubectl apply -f /tmp/node-cpu-hog-wn4.yaml -n {{workflow.parameters.adminModeNamespace}}
+        &&  sleep 30
+      command:
+      - sh
+      - -c
+      image: litmuschaos/k8s:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-cpu-hog-wn4
+        path: /tmp/node-cpu-hog-wn4.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            description:
+              message: |
+                Give a cpu spike on a node belonging to a deployment
+            kind: ChaosExperiment
+            metadata:
+              name: node-cpu-hog
+              labels:
+                name: node-cpu-hog
+                app.kubernetes.io/part-of: litmus
+                app.kubernetes.io/component: chaosexperiment
+                app.kubernetes.io/version: 2.12.0
+            spec:
+              definition:
+                scope: Cluster
+                permissions:
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods
+                    verbs:
+                      - create
+                      - delete
+                      - get
+                      - list
+                      - patch
+                      - update
+                      - deletecollection
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - events
+                    verbs:
+                      - create
+                      - get
+                      - list
+                      - patch
+                      - update
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - configmaps
+                    verbs:
+                      - get
+                      - list
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/log
+                    verbs:
+                      - get
+                      - list
+                      - watch
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - pods/exec
+                    verbs:
+                      - get
+                      - list
+                      - create
+                  - apiGroups:
+                      - batch
+                    resources:
+                      - jobs
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - delete
+                      - deletecollection
+                  - apiGroups:
+                      - litmuschaos.io
+                    resources:
+                      - chaosengines
+                      - chaosexperiments
+                      - chaosresults
+                    verbs:
+                      - create
+                      - list
+                      - get
+                      - patch
+                      - update
+                      - delete
+                  - apiGroups:
+                      - ""
+                    resources:
+                      - nodes
+                    verbs:
+                      - get
+                      - list
+                image: litmuschaos/go-runner:2.12.0
+                imagePullPolicy: Always
+                args:
+                  - -c
+                  - ./experiments -name node-cpu-hog
+                command:
+                  - /bin/bash
+                env:
+                  - name: TOTAL_CHAOS_DURATION
+                    value: "60"
+                  - name: RAMP_TIME
+                    value: ""
+                  - name: NODE_CPU_CORE
+                    value: ""
+                  - name: CPU_LOAD
+                    value: "100"
+                  - name: TARGET_NODES
+                    value: ""
+                  - name: NODE_LABEL
+                    value: ""
+                  - name: LIB
+                    value: litmus
+                  - name: LIB_IMAGE
+                    value: litmuschaos/go-runner:2.12.0
+                  - name: NODES_AFFECTED_PERC
+                    value: ""
+                  - name: SEQUENCE
+                    value: parallel
+                labels:
+                  name: node-cpu-hog
+                  app.kubernetes.io/part-of: litmus
+                  app.kubernetes.io/component: experiment-job
+                  app.kubernetes.io/version: 2.12.0
+    metadata: {}
+    name: install-chaos-experiments
+    outputs: {}
+  - container:
+      args:
+      - -file=/tmp/chaosengine-node-cpu-hog-wn4.yaml
+      - -saveName=/tmp/engine-name
+      image: litmuschaos/litmus-checker:2.12.0
+      name: ""
+      resources: {}
+    inputs:
+      artifacts:
+      - name: node-cpu-hog-wn4
+        path: /tmp/chaosengine-node-cpu-hog-wn4.yaml
+        raw:
+          data: |
+            apiVersion: litmuschaos.io/v1alpha1
+            kind: ChaosEngine
+            metadata:
+              namespace: "{{workflow.parameters.adminModeNamespace}}"
+              generateName: node-cpu-hog-wn4
+              labels:
+                workflow_run_id: "{{workflow.uid}}"
+            spec:
+              engineState: active
+              auxiliaryAppInfo: ""
+              chaosServiceAccount: litmus-admin
+              experiments:
+                - name: node-cpu-hog
+                  spec:
+                    components:
+                      env:
+                        - name: TOTAL_CHAOS_DURATION
+                          value: "120"
+                        - name: NODE_CPU_CORE
+                          value: "1"
+                        - name: CPU_LOAD
+                          value: "98"
+                        - name: NODES_AFFECTED_PERC
+                          value: ""
+                        - name: TARGET_NODES
+                          value: ""
+                    probe:
+                      - name: probe1
+                        type: k8sProbe
+                        mode: Continuous
+                        runProperties:
+                          probeTimeout: 2
+                          retry: 2
+                          interval: 1
+                          stopOnFailure: false
+                        k8sProbe/inputs:
+                          operation: present
+                          namespace: default
+                          resource: pod
+                          version: v1
+    metadata:
+      labels:
+        weight: "10"
+    name: node-cpu-hog-wn4
+    outputs: {}
+status:
+  finishedAt: null
+  startedAt: null
